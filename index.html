@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resume Parser | Match your resume to a job description</title>
+
+  <!-- Tailwind CSS (play CDN: no build step, good for learning) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Reads text from PDF files -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- Reads text from Word (.docx) files -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+
+  <script src="app.js" defer></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800">
+    <nav class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+      <span class="text-lg font-bold tracking-tight">Resume<span class="text-indigo-400">Parser</span></span>
+      <a href="#analyzer" class="rounded-md bg-indigo-500 px-4 py-2 text-sm font-semibold hover:bg-indigo-400">Try it</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="mx-auto max-w-6xl px-6 pb-10 pt-16 text-center">
+      <p class="text-sm font-semibold uppercase tracking-widest text-indigo-400">Free, runs in your browser</p>
+      <h1 class="mt-4 text-4xl font-extrabold tracking-tight sm:text-5xl">
+        See how well your resume matches the job.
+      </h1>
+      <p class="mx-auto mt-4 max-w-2xl text-lg text-slate-400">
+        Drop your resume (PDF or Word), paste the job description, and get a scorecard with
+        the keywords you have, the ones you are missing, and what to fix.
+      </p>
+    </section>
+
+    <!-- Analyzer -->
+    <section id="analyzer" class="mx-auto grid max-w-6xl gap-6 px-6 pb-16 lg:grid-cols-2">
+
+      <!-- Resume upload -->
+      <div class="flex flex-col rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <h2 class="text-lg font-semibold">1. Your resume</h2>
+        <p class="mt-1 text-sm text-slate-400">PDF or Word (.docx), up to 5 MB.</p>
+
+        <label id="dropzone"
+          class="mt-4 flex flex-1 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-slate-700 p-8 text-center transition hover:border-indigo-400 hover:bg-slate-800/50">
+          <span class="text-4xl" aria-hidden="true">📄</span>
+          <span class="font-medium">Drag and drop your resume here</span>
+          <span class="text-sm text-slate-400">or <span class="text-indigo-400 underline">browse your files</span></span>
+          <input id="resume-input" type="file" accept=".pdf,.docx" class="sr-only">
+        </label>
+
+        <p id="file-name" class="mt-3 text-sm text-slate-300"></p>
+        <p id="file-error" class="mt-1 text-sm text-rose-400" role="alert"></p>
+      </div>
+
+      <!-- Job description -->
+      <div class="flex flex-col rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <h2 class="text-lg font-semibold">2. Job description</h2>
+        <p class="mt-1 text-sm text-slate-400">Paste the full posting. The more detail, the better the match.</p>
+
+        <label for="jd-input" class="sr-only">Job description</label>
+        <textarea id="jd-input" rows="12" placeholder="Paste the job description here..."
+          class="mt-4 w-full flex-1 resize-y rounded-xl border border-slate-700 bg-slate-950 p-4 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"></textarea>
+
+        <button id="analyze-btn" type="button"
+          class="mt-4 rounded-xl bg-indigo-500 px-6 py-3 font-semibold text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50">
+          Analyze my resume
+        </button>
+        <p id="form-error" class="mt-2 text-sm text-rose-400" role="alert"></p>
+      </div>
+    </section>
+
+    <!-- Scorecard (filled in by app.js) -->
+    <section id="scorecard" class="mx-auto hidden max-w-6xl px-6 pb-20">
+      <h2 class="text-2xl font-bold">Your scorecard</h2>
+
+      <div class="mt-6 grid gap-6 lg:grid-cols-3">
+
+        <!-- Overall score -->
+        <div class="flex flex-col items-center rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <svg viewBox="0 0 120 120" class="h-40 w-40 -rotate-90" aria-hidden="true">
+            <circle cx="60" cy="60" r="54" fill="none" stroke="currentColor" stroke-width="10" class="text-slate-800"></circle>
+            <circle id="score-ring" cx="60" cy="60" r="54" fill="none" stroke="currentColor" stroke-width="10"
+              stroke-linecap="round" class="text-indigo-400 transition-all duration-700"
+              stroke-dasharray="339.29" stroke-dashoffset="339.29"></circle>
+          </svg>
+          <p class="-mt-28 text-4xl font-extrabold" id="score-value">0</p>
+          <p class="mt-20 text-sm text-slate-400">Overall match</p>
+          <p id="score-label" class="mt-1 font-semibold"></p>
+
+          <dl class="mt-6 w-full space-y-2 text-sm">
+            <div class="flex justify-between"><dt class="text-slate-400">Keyword match</dt><dd id="kw-score" class="font-semibold"></dd></div>
+            <div class="flex justify-between"><dt class="text-slate-400">Resume structure</dt><dd id="structure-score" class="font-semibold"></dd></div>
+          </dl>
+        </div>
+
+        <!-- Keywords -->
+        <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6 lg:col-span-2">
+          <h3 class="font-semibold">Keywords from the job description</h3>
+
+          <p class="mt-4 text-sm font-medium text-emerald-400">Found in your resume</p>
+          <div id="matched-list" class="mt-2 flex flex-wrap gap-2"></div>
+
+          <p class="mt-6 text-sm font-medium text-rose-400">Missing from your resume</p>
+          <div id="missing-list" class="mt-2 flex flex-wrap gap-2"></div>
+        </div>
+
+        <!-- Strengths -->
+        <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <h3 class="font-semibold text-emerald-400">Strengths</h3>
+          <ul id="strengths-list" class="mt-4 list-disc space-y-2 pl-5 text-sm text-slate-300"></ul>
+        </div>
+
+        <!-- Weaknesses -->
+        <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <h3 class="font-semibold text-rose-400">Weaknesses</h3>
+          <ul id="weaknesses-list" class="mt-4 list-disc space-y-2 pl-5 text-sm text-slate-300"></ul>
+        </div>
+
+        <!-- Structure checks -->
+        <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <h3 class="font-semibold">Resume checklist</h3>
+          <ul id="checks-list" class="mt-4 space-y-2 text-sm"></ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-slate-800 py-6 text-center text-sm text-slate-500">
+    Your files are read in your browser and never uploaded anywhere.
+  </footer>
+</body>
+</html>
